@@ -85,9 +85,9 @@ func New(settings Config) (*gopass, error) {
 	return &gopass{settings: settings}, nil
 }
 
-// temporary
+// ShowSettings will print out the current config settings
 func (g *gopass) ShowSettings() {
-	fmt.Printf("MinPassLength: %d\n", g.settings.MinPassLength)
+	fmt.Printf("%+v\n", g.settings)
 }
 
 // HashAndSalt generates a random salt, hashes the provided password using Argon2id,
