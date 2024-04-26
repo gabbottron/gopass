@@ -8,6 +8,9 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"time"
+
+	mathrand "math/rand"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -41,18 +44,26 @@ type gopass struct {
 	settings Config
 }
 
-// New creates a new Gopass instance and assigns the provided Settings object
-func New(settings Config) *gopass {
+// Since this library is meant to be used in production systems that are generating and
+// storing passwords, any program that is using this library should fail at startup
+// if we can't generate good random values. Doing it this way prevents runtime errors
+// that happen periodically in an API given the user creation will only happen intermittently
+func init() {
 	// if no cryptographically secure PRNG is available it is unsafe to use this library on this system
 	if err := assertAvailablePRNG(); err != nil {
 		panic(fmt.Errorf("crypto initialization failed: %v", err))
 	}
 
+	mathrand.Seed(time.Now().UnixNano())
+}
+
+// New creates a new Gopass instance and assigns the provided Settings object
+func New(settings Config) (*gopass, error) {
 	if err := checkCryptoSettingsForSanity(settings); err != nil {
-		panic(fmt.Errorf("crypto initialization failed: %v", err))
+		return nil, fmt.Errorf("invalid crypto settings: %w", err)
 	}
 
-	return &gopass{settings: settings}
+	return &gopass{settings: settings}, nil
 }
 
 // temporary
@@ -60,6 +71,7 @@ func (g *gopass) ShowSettings() {
 	fmt.Printf("MinPassLength: %d\n", g.settings.MinPassLength)
 }
 
+// this will generate a password hash and salt using the Argon2 lib IDKey method
 func (g *gopass) HashAndSalt(plainPass string) ([]byte, []byte, error) {
 	pass_bytes := []byte(plainPass)
 
@@ -73,8 +85,8 @@ func (g *gopass) HashAndSalt(plainPass string) ([]byte, []byte, error) {
 	return key, salt, nil
 }
 
-func (g *gopass) GenerateRandomPass() (string, error) {
-	return generateRandomStringURLSafe(32)
+func (g *gopass) GenerateRandomPass(length int) (string, error) {
+	return generateRandomStringURLSafe(length)
 }
 
 // will hash and salt plainPass with provided salt and compare it to hashedPass
@@ -86,6 +98,57 @@ func (g *gopass) ComparePasswords(hashedPass []byte, salt []byte, plainPass stri
 	}
 
 	return true
+}
+
+// Checks the password supplied against our password configuration standards
+// and returns prescriptive error messages
+func (g *gopass) ValidatePassword(password string) error {
+	var errors []string
+
+	if len(password) < g.settings.MinPassLength {
+		errors = append(errors, fmt.Sprintf("Password length must be at least %d characters", g.settings.MinPassLength))
+	}
+	if len(password) > g.settings.MaxPassLength {
+		errors = append(errors, fmt.Sprintf("Password length cannot exceed %d characters", g.settings.MaxPassLength))
+	}
+	if countSpecialChars(password) < g.settings.ReqSpecialChars {
+		errors = append(errors, fmt.Sprintf("Password must contain at least %d special characters", g.settings.ReqSpecialChars))
+	}
+	if countNumbers(password) < g.settings.ReqNumbers {
+		errors = append(errors, fmt.Sprintf("Password must contain at least %d numbers", g.settings.ReqNumbers))
+	}
+	if maxRepeatedChars(password) > g.settings.MaxRepeatedChars {
+		errors = append(errors, fmt.Sprintf("Password cannot contain more than %d repeated characters in sequence", g.settings.MaxRepeatedChars))
+	}
+
+	if len(errors) > 0 {
+		return &PasswordValidationError{Errors: errors}
+	}
+
+	return nil
+}
+
+// SpeedTest generates and hashes a specified number of random passwords, measuring the duration of the operation.
+func (g *gopass) SpeedTest(numPasswords int, minPassLength int, maxPassLength int) float64 {
+	start := time.Now() // Start the timer
+
+	for i := 0; i < numPasswords; i++ {
+		passLength := mathrand.Intn(maxPassLength - minPassLength + 1)
+		password, err := g.GenerateRandomPass(passLength) // Generate a random password
+		if err != nil {
+			fmt.Println("Error generating password:", err)
+			continue
+		}
+
+		_, _, err = g.HashAndSalt(password) // Hash and salt the generated password
+		if err != nil {
+			fmt.Println("Error hashing password:", err)
+			continue
+		}
+	}
+
+	elapsed := time.Since(start) // Calculate the elapsed time
+	return elapsed.Seconds()     // Return the duration in seconds
 }
 
 // will hash password with supplied salt and return it
@@ -157,77 +220,4 @@ func generateRandomBytes(n int) ([]byte, error) {
 	}
 
 	return b, nil
-}
-
-func (g *gopass) ValidatePassword(password string) error {
-	var errors []string
-
-	if len(password) < g.settings.MinPassLength {
-		errors = append(errors, fmt.Sprintf("Password length must be at least %d characters", g.settings.MinPassLength))
-	}
-	if len(password) > g.settings.MaxPassLength {
-		errors = append(errors, fmt.Sprintf("Password length cannot exceed %d characters", g.settings.MaxPassLength))
-	}
-	if countSpecialChars(password) < g.settings.ReqSpecialChars {
-		errors = append(errors, fmt.Sprintf("Password must contain at least %d special characters", g.settings.ReqSpecialChars))
-	}
-	if countNumbers(password) < g.settings.ReqNumbers {
-		errors = append(errors, fmt.Sprintf("Password must contain at least %d numbers", g.settings.ReqNumbers))
-	}
-	if maxRepeatedChars(password) > g.settings.MaxRepeatedChars {
-		errors = append(errors, fmt.Sprintf("Password cannot contain more than %d repeated characters in sequence", g.settings.MaxRepeatedChars))
-	}
-
-	if len(errors) > 0 {
-		return &PasswordValidationError{Errors: errors}
-	}
-
-	return nil
-}
-
-func countSpecialChars(s string) int {
-	count := 0
-	for _, ch := range s {
-		if !isLetter(ch) && !isNumber(ch) {
-			count++
-		}
-	}
-	return count
-}
-
-func countNumbers(s string) int {
-	count := 0
-	for _, ch := range s {
-		if isNumber(ch) {
-			count++
-		}
-	}
-	return count
-}
-
-func maxRepeatedChars(s string) int {
-	max := 0
-	cur := 1
-	for i := 1; i < len(s); i++ {
-		if s[i] == s[i-1] {
-			cur++
-		} else {
-			if cur > max {
-				max = cur
-			}
-			cur = 1
-		}
-	}
-	if cur > max {
-		max = cur
-	}
-	return max
-}
-
-func isLetter(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
-}
-
-func isNumber(ch rune) bool {
-	return ch >= '0' && ch <= '9'
 }
