@@ -16,23 +16,39 @@ import (
 )
 
 type Config struct {
-	MinPassLength       int // minimum allowed character length
-	MaxPassLength       int // maximum allowed character length
-	ReqSpecialChars     int // minimum number of special characters in password
-	ReqNumbers          int // minimum number of numeric characters in password
-	MaxRepeatedChars    int // maximum number of repeated characters in password
-	MaxNumericSeqLength int // maximum number of sequential numeric characters in password (e.g. 3 -> 1234 BAD)
+	// Minimum allowed password character length.
+	MinPassLength int
 
-	// Settings for Argon2
-	HashTime      uint32 // ???
-	HashMemory    uint32 // in mb, minimum 64
-	HashThreads   uint8  // minimum 4
-	HashKeyLength uint32 // minimum 128
-	SaltBytes     int    // minimum 128
+	// Maximum allowed password character length.
+	MaxPassLength int
+
+	// Minimum number of special characters required in the password.
+	ReqSpecialChars int
+
+	// Minimum number of numeric characters required in the password.
+	ReqNumbers int
+
+	// Maximum number of consecutive repeated characters allowed in the password.
+	MaxRepeatedChars int
+
+	// Maximum length of sequential numeric characters allowed in the password (e.g., 1234 is bad).
+	MaxNumericSeqLength int
+
+	// Argon2 settings:
+	//  - HashTime: The number of iterations for password hashing (higher is more secure, but slower).
+	//  - HashMemory: The memory cost for password hashing (higher is more secure, but uses more memory).
+	//  - HashThreads: The number of threads to use for parallel password hashing.
+	//  - HashKeyLength: The desired length of the derived key from Argon2 (in bytes).
+	//  - SaltBytes: The length of the random salt to use for password hashing (in bytes).
+	HashTime      uint32
+	HashMemory    uint32 // in MB
+	HashThreads   uint8
+	HashKeyLength uint32
+	SaltBytes     int
 }
 
 type PasswordValidationError struct {
-	Errors []string
+	Errors []string // list of prescriptive error messages
 }
 
 func (e *PasswordValidationError) Error() string {
@@ -41,7 +57,7 @@ func (e *PasswordValidationError) Error() string {
 
 // gopass holds the instance level variable for settings
 type gopass struct {
-	settings Config
+	settings Config // password library configuration
 }
 
 // Since this library is meant to be used in production systems that are generating and
@@ -49,15 +65,18 @@ type gopass struct {
 // if we can't generate good random values. Doing it this way prevents runtime errors
 // that happen periodically in an API given the user creation will only happen intermittently
 func init() {
-	// if no cryptographically secure PRNG is available it is unsafe to use this library on this system
+	// Enforce presence of a cryptographically secure random number generator (CSPRNG).
+	// If unavailable, panic to prevent insecure password storage.
 	if err := assertAvailablePRNG(); err != nil {
 		panic(fmt.Errorf("crypto initialization failed: %v", err))
 	}
 
+	// Seed the math/rand package for random password generation.
 	mathrand.Seed(time.Now().UnixNano())
 }
 
-// New creates a new Gopass instance and assigns the provided Settings object
+// New creates a new Gopass instance and validates the provided configuration settings.
+// Returns an error if the settings are invalid.
 func New(settings Config) (*gopass, error) {
 	if err := checkCryptoSettingsForSanity(settings); err != nil {
 		return nil, fmt.Errorf("invalid crypto settings: %w", err)
@@ -71,7 +90,8 @@ func (g *gopass) ShowSettings() {
 	fmt.Printf("MinPassLength: %d\n", g.settings.MinPassLength)
 }
 
-// this will generate a password hash and salt using the Argon2 lib IDKey method
+// HashAndSalt generates a random salt, hashes the provided password using Argon2id,
+// and returns the derived key and salt.
 func (g *gopass) HashAndSalt(plainPass string) ([]byte, []byte, error) {
 	pass_bytes := []byte(plainPass)
 
@@ -85,11 +105,12 @@ func (g *gopass) HashAndSalt(plainPass string) ([]byte, []byte, error) {
 	return key, salt, nil
 }
 
+// GenerateRandomPass generates a random URL-safe, base64 encoded string of the specified length.
 func (g *gopass) GenerateRandomPass(length int) (string, error) {
 	return generateRandomStringURLSafe(length)
 }
 
-// will hash and salt plainPass with provided salt and compare it to hashedPass
+// ComparePasswords compares a plain text password against a hashed password and salt.
 func (g *gopass) ComparePasswords(hashedPass []byte, salt []byte, plainPass string) bool {
 	plainPassHashed := g.hashAndSaltWithSalt(plainPass, salt)
 
@@ -151,7 +172,7 @@ func (g *gopass) SpeedTest(numPasswords int, minPassLength int, maxPassLength in
 	return elapsed.Seconds()     // Return the duration in seconds
 }
 
-// will hash password with supplied salt and return it
+// hashAndSaltWithSalt will hash password with supplied salt and return it
 func (g *gopass) hashAndSaltWithSalt(plainPass string, salt []byte) []byte {
 	pass_bytes := []byte(plainPass)
 
@@ -160,6 +181,7 @@ func (g *gopass) hashAndSaltWithSalt(plainPass string, salt []byte) []byte {
 	return key
 }
 
+// generateRandomString will generate a random string of n length with the provided letters
 func generateRandomString(n int) (string, error) {
 	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
 	bytes, err := generateRandomBytes(n)
@@ -182,6 +204,8 @@ func generateRandomStringURLSafe(n int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b), err
 }
 
+// assertAvailablePRNG will return an error if the system can't generate
+// sufficiently random values
 func assertAvailablePRNG() error {
 	// Assert that a cryptographically secure PRNG is available.
 	// Panic otherwise.
@@ -191,6 +215,9 @@ func assertAvailablePRNG() error {
 	return err
 }
 
+// checkCryptoSettingsForSanity will enforce sensible defaults
+// by returning prescriptive errors if validation fails based
+// on settings
 func checkCryptoSettingsForSanity(settings Config) error {
 	if settings.HashTime < 1 {
 		return errors.New("HashTime must be >= 1")
@@ -211,6 +238,8 @@ func checkCryptoSettingsForSanity(settings Config) error {
 	return nil
 }
 
+// generateRandomBytes will return a random byte slice
+// for use as salt
 func generateRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)

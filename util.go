@@ -1,5 +1,10 @@
 package gopass
 
+/*
+  These are a collection of functions for password strength validation
+*/
+
+// returns a count of non-alphanumeric characters in a string
 func countSpecialChars(s string) int {
 	count := 0
 	for _, ch := range s {
@@ -10,6 +15,7 @@ func countSpecialChars(s string) int {
 	return count
 }
 
+// returns a count of numeric characters in a string
 func countNumbers(s string) int {
 	count := 0
 	for _, ch := range s {
@@ -20,6 +26,7 @@ func countNumbers(s string) int {
 	return count
 }
 
+// returns the count of the longest set of repeated characters in a string
 func maxRepeatedChars(s string) int {
 	max := 0
 	cur := 1
@@ -39,10 +46,12 @@ func maxRepeatedChars(s string) int {
 	return max
 }
 
+// returns true if the character is a letter
 func isLetter(ch rune) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 
+// returns true if the character is a number
 func isNumber(ch rune) bool {
 	return ch >= '0' && ch <= '9'
 }
