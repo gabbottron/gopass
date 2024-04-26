@@ -1,0 +1,23 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below if you intend to use dep)
+#vendor/
+
+# Compiled Object files, Static and Dynamic libs (remove the comment below if you intend to use dep)
+*.o
+*.a
+
+# Ignoring macOS system files
+.DS_Store
+
