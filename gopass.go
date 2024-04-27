@@ -1,18 +1,18 @@
 package gopass
 
 import (
-	"crypto/rand"
+	rand "crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	// used for random password length in speed tests
 	mathrand "math/rand"
 
-	"golang.org/x/crypto/argon2"
+	argon2 "golang.org/x/crypto/argon2"
 )
 
 type Config struct {
@@ -105,9 +105,17 @@ func (g *gopass) HashAndSalt(plainPass string) ([]byte, []byte, error) {
 	return key, salt, nil
 }
 
-// GenerateRandomPass generates a random URL-safe, base64 encoded string of the specified length.
 func (g *gopass) GenerateRandomPass(length int) (string, error) {
-	return generateRandomStringURLSafe(length)
+	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()-_=+[]{};':,.<>/?~"
+	bytes := make([]byte, length) // Ensure buffer size matches desired length
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	for i := range bytes {
+		bytes[i] = letters[bytes[i]%byte(len(letters))]
+	}
+	return string(bytes), nil
 }
 
 // ComparePasswords compares a plain text password against a hashed password and salt.
@@ -183,29 +191,6 @@ func (g *gopass) hashAndSaltWithSalt(plainPass string, salt []byte) []byte {
 	key := argon2.IDKey(pass_bytes, salt, g.settings.HashTime, g.settings.HashMemory*1024, g.settings.HashThreads, g.settings.HashKeyLength)
 
 	return key
-}
-
-// generateRandomString will generate a random string of n length with the provided letters
-func generateRandomString(n int) (string, error) {
-	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
-	bytes, err := generateRandomBytes(n)
-	if err != nil {
-		return "", err
-	}
-	for i, b := range bytes {
-		bytes[i] = letters[b%byte(len(letters))]
-	}
-	return string(bytes), nil
-}
-
-// GenerateRandomStringURLSafe returns a URL-safe, base64 encoded
-// securely generated random string.
-// It will return an error if the system's secure random
-// number generator fails to function correctly, in which
-// case the caller should not continue.
-func generateRandomStringURLSafe(n int) (string, error) {
-	b, err := generateRandomBytes(n)
-	return base64.URLEncoding.EncodeToString(b), err
 }
 
 // assertAvailablePRNG will return an error if the system can't generate
