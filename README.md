@@ -1,6 +1,6 @@
-## gopass - Secure Password Management Library
+## gopass - Password Utility Library
 
-This Go library, `gopass`, provides functions for securely generating, hashing, validating, and comparing passwords. It prioritizes security by enforcing strong password complexity rules and using Argon2id for password hashing with configurable parameters.
+This Go library, `gopass`, provides functions for generating, hashing, validating, and comparing passwords. It prioritizes security by enforcing strong password complexity rules and using Argon2id for password hashing with configurable parameters.
 
 **Features:**
 
@@ -8,8 +8,8 @@ This Go library, `gopass`, provides functions for securely generating, hashing, 
 * Requires a minimum number of special characters and numeric digits.
 * Limits the number of consecutive repeated characters.
 * Prevents sequential numeric sequences (e.g., "1234").
-* Hashes passwords using the secure Argon2id algorithm with configurable parameters.
-* Generates cryptographically secure random passwords.
+* Hashes passwords using the Argon2id algorithm with configurable parameters.
+* Generates random passwords.
 * Compares plain text passwords against hashed passwords and salts.
 * Performs password complexity validation with informative error messages.
 
