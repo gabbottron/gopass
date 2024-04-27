@@ -2,11 +2,11 @@ package gopass
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"time"
 
@@ -111,14 +111,18 @@ func (g *gopass) GenerateRandomPass(length int) (string, error) {
 }
 
 // ComparePasswords compares a plain text password against a hashed password and salt.
-func (g *gopass) ComparePasswords(hashedPass []byte, salt []byte, plainPass string) bool {
+func (g *gopass) ComparePasswords(hashedPass []byte, salt []byte, plainPass string) (bool, error) {
 	plainPassHashed := g.hashAndSaltWithSalt(plainPass, salt)
 
-	if !reflect.DeepEqual(hashedPass, plainPassHashed) {
-		return false
+	result := subtle.ConstantTimeCompare(hashedPass, plainPassHashed)
+	if result == 1 {
+		return true, nil // Hashed passwords match
+	} else if result == -1 {
+		return false, nil // Hashed passwords don't match
+	} else {
+		// This case should never happen with valid usage of ConstantTimeCompare
+		return false, errors.New("Unexpected comparison error")
 	}
-
-	return true
 }
 
 // Checks the password supplied against our password configuration standards

@@ -147,14 +147,14 @@ func TestComparePasswords(t *testing.T) {
 	}
 
 	// Test valid comparison
-	valid := gp.ComparePasswords(hashedPass, salt, password)
+	valid, _ := gp.ComparePasswords(hashedPass, salt, password)
 	if !valid {
 		t.Errorf("Expected password to be valid")
 	}
 
 	// Test invalid comparison (wrong password)
 	invalidPassword := "incorrectHorseBatteryStaple"
-	valid = gp.ComparePasswords(hashedPass, salt, invalidPassword)
+	valid, _ = gp.ComparePasswords(hashedPass, salt, invalidPassword)
 	if valid {
 		t.Errorf("Expected password to be invalid")
 	}
